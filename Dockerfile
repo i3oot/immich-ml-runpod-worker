@@ -5,7 +5,7 @@ USER root
 WORKDIR /worker
 
 COPY requirements.txt /worker/requirements.txt
-RUN pip install --no-cache-dir -r /worker/requirements.txt
+RUN /opt/venv/bin/python3 -m pip install --no-cache-dir -r /worker/requirements.txt
 
 COPY handler.py /worker/handler.py
 COPY test_input.json /worker/test_input.json
@@ -16,4 +16,4 @@ ENV HF_HOME=/cache/huggingface
 ENV HF_XET_CACHE=/cache/huggingface-xet
 ENV MPLCONFIGDIR=/cache/matplotlib
 
-CMD ["python", "-u", "/worker/handler.py"]
+CMD ["/opt/venv/bin/python3", "-u", "/worker/handler.py"]
