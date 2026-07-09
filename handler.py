@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import os
 import time
 from typing import Any
@@ -80,7 +81,10 @@ def _predict(job_input: dict[str, Any]) -> dict[str, Any]:
         payload = text
 
     try:
-        result = asyncio.run(run_inference(payload, (without_deps, with_deps)))
+        # RunPod may invoke a synchronous handler from its asyncio loop. Run the
+        # Immich async inference pipeline in a dedicated thread/event loop.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            result = executor.submit(asyncio.run, run_inference(payload, (without_deps, with_deps))).result()
         return {"ok": True, "result": result}
     except Exception as exc:
         return {"ok": False, "error": "inference_failed", "message": str(exc)}
