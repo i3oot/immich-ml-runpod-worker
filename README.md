@@ -12,14 +12,14 @@ This repository is public so RunPod can pull the worker image from GHCR without
 private registry credentials. Do not add secrets, tokens, customer data, or
 private model files to this repository or image.
 
-The worker is currently a scaffold. It supports a health operation and explicit
-errors for unsupported operations. It does not yet implement CLIP embeddings,
-face detection, OCR, or any other Immich ML operation.
+The worker supports the health operation and an Immich-compatible `predict`
+operation for CLIP visual embeddings, face detection/recognition, and OCR.
+Unsupported operations return explicit errors.
 
 This repo builds a custom worker image on top of:
 
 ```text
-ghcr.io/immich-app/immich-machine-learning:v3.0.0-cuda
+ghcr.io/immich-app/immich-machine-learning:v3.0.2-cuda
 ```
 
 The worker is intentionally a thin RunPod handler. Immich itself will not call this endpoint directly. A Kubernetes gateway will translate Immich ML HTTP requests into RunPod jobs and translate RunPod results back into Immich-compatible responses.
@@ -53,6 +53,12 @@ Input:
 Output includes the worker name, configured Immich version, configured cache
 path, supported operations, and a Unix timestamp.
 
+### `predict`
+
+The gateway sends the Immich ML pipeline plus either a base64 encoded image or
+text. The worker executes the pipeline with the bundled Immich ML runtime and
+returns the native Immich response under `result`.
+
 ### Unsupported Operations
 
 Any other operation returns:
@@ -64,8 +70,8 @@ Any other operation returns:
 }
 ```
 
-This is intentional. Operation adapters should be added only after the gateway
-request and response contract is defined.
+This is intentional. New operation adapters should be added only after the
+gateway request and response contract is defined.
 
 ## Build Locally
 
@@ -109,7 +115,7 @@ Recommended initial endpoint settings:
 Environment variables:
 
 ```text
-IMMICH_VERSION=v3.0.0
+IMMICH_VERSION=v3.0.2
 WORKER_VERSION=<image-tag>
 MODEL_CACHE_DIR=/cache
 TRANSFORMERS_CACHE=/cache/transformers

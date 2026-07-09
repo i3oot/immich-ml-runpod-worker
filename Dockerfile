@@ -1,4 +1,4 @@
-FROM ghcr.io/immich-app/immich-machine-learning:v3.0.0-cuda
+FROM ghcr.io/immich-app/immich-machine-learning:v3.0.2-cuda
 
 USER root
 
