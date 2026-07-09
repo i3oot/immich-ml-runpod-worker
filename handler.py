@@ -8,15 +8,18 @@ import runpod
 IMMICH_VERSION = os.getenv("IMMICH_VERSION", "v3.0.0")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", "/cache")
 WORKER_VERSION = os.getenv("WORKER_VERSION", "dev")
+WORKER_NAME = "immich-ml-runpod-worker"
+SUPPORTED_OPERATIONS = {"health"}
 
 
 def _health() -> dict[str, Any]:
     return {
         "ok": True,
-        "worker": "immich-ml-runpod-worker",
+        "worker": WORKER_NAME,
         "workerVersion": WORKER_VERSION,
         "immichVersion": IMMICH_VERSION,
         "modelCacheDir": MODEL_CACHE_DIR,
+        "supportedOperations": sorted(SUPPORTED_OPERATIONS),
         "time": int(time.time()),
     }
 
@@ -34,8 +37,22 @@ def _unsupported(operation: str) -> dict[str, Any]:
 
 
 def handler(job: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(job, dict):
+        return {
+            "ok": False,
+            "error": "invalid_job",
+            "message": "RunPod job payload must be a JSON object.",
+        }
+
     job_input = job.get("input") or {}
-    operation = str(job_input.get("operation", "health"))
+    if not isinstance(job_input, dict):
+        return {
+            "ok": False,
+            "error": "invalid_input",
+            "message": "RunPod job input must be a JSON object.",
+        }
+
+    operation = str(job_input.get("operation", "health")).strip().lower()
 
     if operation == "health":
         return _health()
