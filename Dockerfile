@@ -5,7 +5,8 @@ USER root
 WORKDIR /worker
 
 COPY requirements.txt /worker/requirements.txt
-RUN /opt/venv/bin/python3 -m pip install --no-cache-dir -r /worker/requirements.txt
+RUN /opt/venv/bin/python3 -m ensurepip --upgrade \
+    && /opt/venv/bin/python3 -m pip install --no-cache-dir -r /worker/requirements.txt
 
 COPY handler.py /worker/handler.py
 COPY test_input.json /worker/test_input.json
