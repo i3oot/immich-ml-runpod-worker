@@ -4,6 +4,7 @@ import dataclasses
 import json
 from concurrent.futures import ThreadPoolExecutor
 import os
+from pathlib import Path
 import time
 from typing import Any
 
@@ -69,9 +70,10 @@ def _predict(job_input: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": "invalid_entries", "message": "entries must be an Immich ML pipeline object."}
 
     image_base64 = job_input.get("imageBase64")
+    image_path = job_input.get("imagePath")
     text = job_input.get("text")
-    if not image_base64 and not isinstance(text, str):
-        return {"ok": False, "error": "missing_input", "message": "imageBase64 or text is required."}
+    if not image_base64 and not image_path and not isinstance(text, str):
+        return {"ok": False, "error": "missing_input", "message": "imageBase64, imagePath, or text is required."}
 
     without_deps: list[dict[str, Any]] = []
     with_deps: list[dict[str, Any]] = []
@@ -89,30 +91,44 @@ def _predict(job_input: dict[str, Any]) -> dict[str, Any]:
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         return {"ok": False, "error": "invalid_entries", "message": str(exc)}
 
-    if image_base64:
-        try:
-            payload = decode_pil(base64.b64decode(image_base64, validate=True))
-        except Exception as exc:
-            return {"ok": False, "error": "invalid_image", "message": str(exc)}
-    else:
-        payload = text
-
+    cleanup_path: Path | None = None
     last_error: Exception | None = None
-    for attempt in range(3):
-        try:
+    try:
+        if image_path:
+            root = Path("/runpod-volume").resolve()
+            candidate = (root / str(image_path).lstrip("/\\")).resolve()
+            if root not in candidate.parents or not str(candidate).startswith("/runpod-volume/immich/"):
+                return {"ok": False, "error": "invalid_image_path", "message": "imagePath is outside the temporary Immich volume prefix."}
+            cleanup_path = candidate
+            payload = decode_pil(candidate.read_bytes())
+        elif image_base64:
+            payload = decode_pil(base64.b64decode(image_base64, validate=True))
+        else:
+            payload = text
+
+        for attempt in range(3):
+            try:
             # RunPod may invoke a synchronous handler from its asyncio loop. Run
             # the Immich async inference pipeline in a dedicated event loop.
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                result = executor.submit(asyncio.run, run_inference(payload, (without_deps, with_deps))).result()
-            safe_result = _json_safe(result)
-            print("Inference result converted to JSON-safe output", flush=True)
-            return {"ok": True, "result": safe_result}
-        except Exception as exc:
-            last_error = exc
-            if attempt < 2:
-                time.sleep(30 * (attempt + 1))
-
-    return {"ok": False, "error": "inference_failed", "message": str(last_error)}
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    result = executor.submit(asyncio.run, run_inference(payload, (without_deps, with_deps))).result()
+                safe_result = _json_safe(result)
+                print("Inference result converted to JSON-safe output", flush=True)
+                return {"ok": True, "result": safe_result}
+            except Exception as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(30 * (attempt + 1))
+        return {"ok": False, "error": "inference_failed", "message": str(last_error)}
+    except Exception as exc:
+        return {"ok": False, "error": "invalid_image", "message": str(exc)}
+    finally:
+        if cleanup_path:
+            try:
+                cleanup_path.unlink(missing_ok=True)
+                print(f"Removed temporary image {cleanup_path}", flush=True)
+            except Exception as exc:
+                print(f"Failed to remove temporary image {cleanup_path}: {exc}", flush=True)
 
 
 def handler(job: dict[str, Any]) -> dict[str, Any]:
