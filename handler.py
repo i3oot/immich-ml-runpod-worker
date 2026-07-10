@@ -1,5 +1,7 @@
 import asyncio
 import base64
+import dataclasses
+import json
 from concurrent.futures import ThreadPoolExecutor
 import os
 import time
@@ -13,14 +15,18 @@ MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", "/cache")
 
 
 def _json_safe(value: Any) -> Any:
-    """Convert Immich/NumPy inference results into RunPod-serializable JSON."""
-    if hasattr(value, "tolist"):
-        return _json_safe(value.tolist())
-    if isinstance(value, dict):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    return value
+    """Round-trip inference output through JSON using explicit NumPy handling."""
+
+    def default(item: Any) -> Any:
+        if hasattr(item, "tolist"):
+            return item.tolist()
+        if dataclasses.is_dataclass(item):
+            return dataclasses.asdict(item)
+        if hasattr(item, "__dict__"):
+            return vars(item)
+        raise TypeError(f"Unsupported inference result type: {type(item).__name__}")
+
+    return json.loads(json.dumps(value, default=default, allow_nan=False))
 WORKER_VERSION = os.getenv("WORKER_VERSION", "dev")
 WORKER_NAME = "immich-ml-runpod-worker"
 SUPPORTED_OPERATIONS = {"health", "predict"}
@@ -98,7 +104,9 @@ def _predict(job_input: dict[str, Any]) -> dict[str, Any]:
             # the Immich async inference pipeline in a dedicated event loop.
             with ThreadPoolExecutor(max_workers=1) as executor:
                 result = executor.submit(asyncio.run, run_inference(payload, (without_deps, with_deps))).result()
-            return {"ok": True, "result": _json_safe(result)}
+            safe_result = _json_safe(result)
+            print("Inference result converted to JSON-safe output", flush=True)
+            return {"ok": True, "result": safe_result}
         except Exception as exc:
             last_error = exc
             if attempt < 2:
