@@ -80,14 +80,20 @@ def _predict(job_input: dict[str, Any]) -> dict[str, Any]:
     else:
         payload = text
 
-    try:
-        # RunPod may invoke a synchronous handler from its asyncio loop. Run the
-        # Immich async inference pipeline in a dedicated thread/event loop.
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            result = executor.submit(asyncio.run, run_inference(payload, (without_deps, with_deps))).result()
-        return {"ok": True, "result": result}
-    except Exception as exc:
-        return {"ok": False, "error": "inference_failed", "message": str(exc)}
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            # RunPod may invoke a synchronous handler from its asyncio loop. Run
+            # the Immich async inference pipeline in a dedicated event loop.
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                result = executor.submit(asyncio.run, run_inference(payload, (without_deps, with_deps))).result()
+            return {"ok": True, "result": result}
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(30 * (attempt + 1))
+
+    return {"ok": False, "error": "inference_failed", "message": str(last_error)}
 
 
 def handler(job: dict[str, Any]) -> dict[str, Any]:
