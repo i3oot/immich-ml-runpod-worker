@@ -16,6 +16,11 @@ The worker supports the health operation and an Immich-compatible `predict`
 operation for CLIP visual embeddings, face detection/recognition, and OCR.
 Unsupported operations return explicit errors.
 
+The Kubernetes gateway is maintained separately in the
+[`i3oot/gitops` repository](https://github.com/i3oot/gitops/tree/main/clusters/i3oot.de/apps/immich),
+including its [gateway code](https://github.com/i3oot/gitops/blob/main/clusters/i3oot.de/apps/immich/configmap-immich-ml-gateway.yaml),
+Deployment, S3 Secret, and CPU cleanup CronJob.
+
 This repo builds a custom worker image on top of:
 
 ```text

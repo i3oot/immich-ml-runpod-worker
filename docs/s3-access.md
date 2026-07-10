@@ -3,6 +3,10 @@
 This document describes the S3-compatible interface used for temporary large
 images. It documents the contract and commands, not any credentials.
 
+The gateway and cleanup implementation live in the separate
+[`i3oot/gitops` Immich manifests](https://github.com/i3oot/gitops/tree/main/clusters/i3oot.de/apps/immich);
+this repository contains only the RunPod worker.
+
 ## Data flow
 
 ```mermaid
