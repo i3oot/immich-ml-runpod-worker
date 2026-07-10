@@ -10,6 +10,17 @@ import runpod
 
 IMMICH_VERSION = os.getenv("IMMICH_VERSION", "v3.0.2")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", "/cache")
+
+
+def _json_safe(value: Any) -> Any:
+    """Convert Immich/NumPy inference results into RunPod-serializable JSON."""
+    if hasattr(value, "tolist"):
+        return _json_safe(value.tolist())
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
 WORKER_VERSION = os.getenv("WORKER_VERSION", "dev")
 WORKER_NAME = "immich-ml-runpod-worker"
 SUPPORTED_OPERATIONS = {"health", "predict"}
@@ -87,7 +98,7 @@ def _predict(job_input: dict[str, Any]) -> dict[str, Any]:
             # the Immich async inference pipeline in a dedicated event loop.
             with ThreadPoolExecutor(max_workers=1) as executor:
                 result = executor.submit(asyncio.run, run_inference(payload, (without_deps, with_deps))).result()
-            return {"ok": True, "result": result}
+            return {"ok": True, "result": _json_safe(result)}
         except Exception as exc:
             last_error = exc
             if attempt < 2:
